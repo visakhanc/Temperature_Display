@@ -7,7 +7,8 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <util/delay.h>
-
+#include <avr/sleep.h>
+#include <stdbool.h>
 
 void display_number(uint16_t num, uint8_t g_dot_pos);
 void avr_init(void);
@@ -29,9 +30,9 @@ void num_to_digits(uint16_t num, uint8_t *digits_buf);
 /* Port and pin definitions for Digit select pins */
 #define SEL_DDR		DDRD
 #define SEL_PORT	PORTD
-#define SEL_0		(1 << PD7)
+#define SEL_0		(1 << PD7) /* Rightmost digit */
 #define SEL_1		(1 << PD6)
-#define SEL_2		(1 << PD5)
+#define SEL_2		(1 << PD5) /* Leftmost digit */
 
 /* Segment definitions for digits */
 enum digits_enum {
@@ -48,8 +49,8 @@ enum digits_enum {
 	DIGIT_NULL = 0
 };
 
-/* Segment patterns for all digits  */
-static uint8_t g_digits_arr[] = { 
+/* Array of all digits  */
+static uint8_t g_digits_arr[] = {
 					DIGIT_0, 
 					DIGIT_1, 
 					DIGIT_2, 
@@ -64,32 +65,48 @@ static uint8_t g_digits_arr[] = {
 
 static uint8_t g_num_digits[3]; /* Individual segment pattern of 3 digit number*/
 static uint8_t g_dot_pos;
-volatile static uint16_t adc_val;
+volatile static bool adc_trigger = false;
 
 /* Main code */
 int main(void)
 {
 	uint16_t degree;
-
+	uint16_t adc_val = 0;
+	uint8_t adc_count = 0;
+	
 	/* Initializations */
 	avr_init();
+	adc_samp(0); /* dummy adc conversion */
+	
+	/* Use IDLE sleep mode */
+	set_sleep_mode(SLEEP_MODE_IDLE);
 	
 	/* Enable interrupts globally */
 	sei(); 
 
 	while(1) {
-
-		adc_val = adc_samp(0);
-		/* Code to degree celcius: Voltage = (2.56V/1024) * CODE; 
-		   Celcius = Voltage/10mV = (256/1024*)CODE => CODE/4 (resolution = 1LSB = 0.25 celc)*/
-		degree = adc_val>>2;
 		
-		/* Allow a hysteresis of 1LSB from X.75 cel to X.75+0.25 celc ; This allows smooth transition from X to X+1 in diplay */
-		if((adc_val - (degree<<2)) != 3) { 
-			num_to_digits(degree, g_num_digits);
+		if(adc_trigger == true) {
+			adc_trigger = false;
+			adc_val += adc_samp(0); /* accumulate some samples */
+			adc_count++;
+			if(adc_count == 16) {
+				adc_val >>= 4; /* take average of the 16 samples */
+				
+				/* Code to degree celcius: Voltage = (2.56V/1024) * CODE; 
+					Celcius = Voltage/10mV = (256/1024*)CODE => CODE/4 (resolution = 1LSB = 0.25 celc) */
+				degree = adc_val>>2;
+				
+				/* Update the digits to display on LCD */
+				num_to_digits(degree, g_num_digits);
+				
+				adc_val = 0;
+				adc_count = 0;
+			}
 		}
-
-		_delay_ms(500);
+		
+		/* sleep until next (timer) interrupt, to save power */
+		sleep_mode();
 	}
 }
 
@@ -131,7 +148,7 @@ uint16_t adc_samp(uint8_t ch)
 /* Converts a number from to digit pattern
  *		num : number to be converted
  *      digits_buf : array to store digit pattern for each digit of the number
- *	NOTE: Current implementation is limited to 3 digit numbers
+ *	NOTE: Limited to 3 digit numbers, with leading zeros not displayed
  */
 void num_to_digits(uint16_t num, uint8_t *digits_buf)
 {
@@ -164,7 +181,10 @@ void num_to_digits(uint16_t num, uint8_t *digits_buf)
 ISR(TIMER0_OVF_vect)
 {
 	static uint8_t pos;
+	static uint8_t counter;
 	
+	/* Activate one digit select pin and output corresponding segment pattern */
+	SEG_PORT = ~DIGIT_NULL;
 	if(pos == 0) {
 		SEL_PORT &= ~(SEL_1|SEL_2);
 		SEL_PORT |= SEL_0;
@@ -178,14 +198,23 @@ ISR(TIMER0_OVF_vect)
 		SEL_PORT |= SEL_2;
 	}
 	SEG_PORT = (uint8_t)~g_num_digits[pos]; /* Common anode display (LOW bit = ON segment)*/
-	if(g_dot_pos == pos) {
+	if(g_dot_pos == pos) { /* If decimal point need to be displayed */
 		SEG_PORT |= SEG_H;
 	}
 	
+	/* cycle the digit select pins */
 	pos++;
 	if(pos > 2) {
 		pos = 0;
 	}
+	
+	/* trigger for ADC at every 30 ms (15 * 2ms = 30ms) */
+	counter++;
+	if(counter == 15) { 
+		counter = 0;
+		adc_trigger = true;
+	}
+		
 }
 
 

@@ -6,9 +6,6 @@ MCU = atmega8
 F_CPU = 1000000
 FORMAT = ihex
 TARGET = main
-COMMON_DIR = ../common
-RFM70_DIR = $(COMMON_DIR)/RFM70_lib
-SPI_DIR = $(COMMON_DIR)/avr_spi
 SRC = $(TARGET).c
 OPT = s
 
@@ -16,13 +13,12 @@ OPT = s
 #     Each directory must be seperated by a space.
 #     Use forward slashes for directory separators.
 #     For a directory that has spaces, enclose it in quotes.
-CINCS = -I$(RFM70_DIR) -I$(SPI_DIR) -I.
+CINCS = -I.
 
 # List any extra directories to look for libraries here.
 #     Each directory must be seperated by a space.
 #     Use forward slashes for directory separators.
 #     For a directory that has spaces, enclose it in quotes.
-EXTRALIBDIRS = $(RFM70_DIR)
 
 
 CSTANDARD = -std=gnu99
@@ -38,9 +34,7 @@ LDFLAGS =  -Wl,-Map=$(TARGET).map,--cref
 LDFLAGS += $(patsubst %,-L%,$(EXTRALIBDIRS))
 #LDFLAGS += -lRFM70
 LDFLAGS += -Wl,--section-start=.text=0x0000
-#new section: bootloader - starting at byte address 0x3C00 
-#note that datasheet gives word address (here, 0x1E00) for different bootloader sections)
-LDFLAGS += -Wl,--section-start=.bootloader=0x3C00
+
 
 ####### AVRDUDE #######
 
@@ -50,10 +44,10 @@ AVRDUDE_WRITE_FLASH = -U flash:w:$(TARGET).hex
 #AVRDUDE_WRITE_EEPROM = -U eeprom:w:$(TARGET).eep
 
 # High and Low fuse settings for AVR
-FUSE_H = 
-FUSE_L = 
+FUSE_H = 0xd9	
+FUSE_L = 0xe1
 
-AVRDUDE_FLAGS = -p $(MCU) -P $(AVRDUDE_PORT) -c $(AVRDUDE_PROGRAMMER)
+AVRDUDE_FLAGS = -B12 -p $(MCU) -P $(AVRDUDE_PORT) -c $(AVRDUDE_PROGRAMMER)
 
 ###### COMPILE AND LINK ########
 CC = avr-gcc
