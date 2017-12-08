@@ -1,6 +1,6 @@
 # AVR Temperature Display
 
-<img src="https://github.com/visakhanc/Temperature_Display/blob/master/pic/picture.jpg">
+<img src="https://github.com/visakhanc/Temperature_Display/blob/master/picture.jpg">
 
 This is a simple digital thermometer based on LM35 temperature sensor. It uses AVR ATmega8 microcontroller to sample LM35 sensor and display the temperature in degree celcius to a 3 digit segment display.
 
@@ -9,7 +9,7 @@ This is a simple digital thermometer based on LM35 temperature sensor. It uses A
 
 1. AVR ATmega8 (uses 1MHz internal clock)
 2. LM35 Temperature sensor
-3. 3 digit 7-Segment display (common anode)
+3. 3 digit 7-Segment display
 4. Capacitors - 0.1uF x 3
 5. Resistors - 10k x 1; 100R x 3
 6. Power supply: 5V
@@ -28,4 +28,4 @@ Extract the source code to a folder. On the command line go into the folder and 
 The output hex file need to be programmed to ATmega8. For this, I use avrdude utility and usbasp programmer. In this case, just type 'make program' after connecting the programmer. If different programmer is used modify the Makefile 'AVRDUDE' section. 
 1MHz internal clock of AVR is used, so the default fuses of ATmega8 need not be changed. But if fuse were modified previously, change them to: HFUSE = 0xd9, LFUSE = 0xe1
 
-*Note: If you use, common cathod display, change the definition COMMON_CATHODE to 1 in main.c*
+*Note: Common Anode type display is used by default. If you use, Common Cathode display, change the definition COMMON_CATHODE to 1 in main.c*
