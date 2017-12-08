@@ -1,5 +1,7 @@
 # AVR Temperature Display
 
+<img src="https://github.com/visakhanc/Temperature_Display/blob/master/pic/picture.jpg">
+
 This is a simple digital thermometer based on LM35 temperature sensor. It uses AVR ATmega8 microcontroller to sample LM35 sensor and display the temperature in degree celcius to a 3 digit segment display.
 
 
