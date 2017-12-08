@@ -10,6 +10,12 @@
 #include <avr/sleep.h>
 #include <stdbool.h>
 
+/* Define to 1 for Common Cathode display, 0 for Common Anode display */
+#define COMMON_CATHODE			0
+/* Define to 1 to use decimal digit segment */
+#define DOT_ENABLED				0
+
+
 void display_number(uint16_t num, uint8_t g_dot_pos);
 void avr_init(void);
 uint16_t adc_samp(uint8_t ch);
@@ -19,11 +25,11 @@ void num_to_digits(uint16_t num, uint8_t *digits_buf);
 #define SEG_DDR		DDRB
 #define SEG_PORT	PORTB
 #define SEG_A		(1 << PB6)
-#define SEG_B		(1 << PB7)
-#define SEG_C		(1 << PB5)
+#define SEG_F		(1 << PB7)
+#define SEG_E		(1 << PB5)
 #define SEG_D		(1 << PB4)
-#define SEG_E		(1 << PB2)
-#define SEG_F		(1 << PB0)
+#define SEG_C		(1 << PB2)
+#define SEG_B		(1 << PB0)
 #define SEG_G		(1 << PB1)
 #define SEG_H		(1 << PB3)
 
@@ -37,15 +43,15 @@ void num_to_digits(uint16_t num, uint8_t *digits_buf);
 /* Segment definitions for digits */
 enum digits_enum {
 	DIGIT_0	= (SEG_A|SEG_B|SEG_C|SEG_D|SEG_E|SEG_F),
-	DIGIT_1	= (SEG_E|SEG_F),
-	DIGIT_2 = (SEG_A|SEG_C|SEG_D|SEG_F|SEG_G),
-	DIGIT_3	= (SEG_A|SEG_D|SEG_E|SEG_F|SEG_G),
-	DIGIT_4 = (SEG_B|SEG_G|SEG_F|SEG_E),
-	DIGIT_5 = (SEG_A|SEG_B|SEG_G|SEG_E|SEG_D),
-	DIGIT_6 = (SEG_A|SEG_B|SEG_C|SEG_D|SEG_E|SEG_G),
-	DIGIT_7 = (SEG_A|SEG_F|SEG_E),
+	DIGIT_1	= (SEG_B|SEG_C),
+	DIGIT_2 = (SEG_A|SEG_B|SEG_G|SEG_E|SEG_D),
+	DIGIT_3	= (SEG_A|SEG_B|SEG_G|SEG_C|SEG_D),
+	DIGIT_4 = (SEG_F|SEG_G|SEG_B|SEG_C),
+	DIGIT_5 = (SEG_A|SEG_F|SEG_G|SEG_C|SEG_D),
+	DIGIT_6 = (SEG_A|SEG_F|SEG_G|SEG_C|SEG_D|SEG_E),
+	DIGIT_7 = (SEG_A|SEG_B|SEG_C),
 	DIGIT_8 = (SEG_A|SEG_B|SEG_C|SEG_D|SEG_E|SEG_F|SEG_G),
-	DIGIT_9 = (SEG_A|SEG_B|SEG_D|SEG_G|SEG_F|SEG_E),
+	DIGIT_9 = (SEG_A|SEG_B|SEG_D|SEG_G|SEG_F|SEG_C),
 	DIGIT_NULL = 0
 };
 
@@ -115,11 +121,20 @@ void avr_init(void)
 {
 	/* Segment port is output */
 	SEG_DDR = 0xFF;
-	SEG_PORT = 0xFF; // all segments OFF
+	/* all segments OFF initially */
+#if COMMON_CATHODE
+	SEG_PORT = 0x00; 
+#else
+	SEG_PORT = 0xFF;
+#endif
 	/* Select pins are output */
 	SEL_DDR |= (SEL_0|SEL_1|SEL_2);
-	SEL_PORT &= ~(SEL_0|SEL_1|SEL_2); // No digit selected
-	
+	/* No digits selected initially */
+#if COMMON_CATHODE
+	SEL_PORT |= (SEL_0|SEL_1|SEL_2);
+#else
+	SEL_PORT &= ~(SEL_0|SEL_1|SEL_2); 
+#endif
 	/* Start Timer0 with presclar = 8 (1MHz clock gives overflow interrupts every 2 ms) */
 	TCCR0 = 0x2;
 	TIMSK |= (1 << TOIE0); // Enable overflow interrupt for TImer0 */
@@ -184,24 +199,53 @@ ISR(TIMER0_OVF_vect)
 	static uint8_t counter;
 	
 	/* Activate one digit select pin and output corresponding segment pattern */
+#if COMMON_CATHODE
+	SEG_PORT = DIGIT_NULL;
+#else
 	SEG_PORT = ~DIGIT_NULL;
+#endif
 	if(pos == 0) {
+#if COMMON_CATHODE
+		SEL_PORT |= (SEL_1|SEL_2);
+		SEL_PORT &= ~SEL_0;
+#else
 		SEL_PORT &= ~(SEL_1|SEL_2);
 		SEL_PORT |= SEL_0;
+#endif
 	}
 	else if(pos == 1) {
+#if COMMON_CATHODE
+		SEL_PORT |= (SEL_0|SEL_2);
+		SEL_PORT &= ~SEL_1;
+#else
 		SEL_PORT &= ~(SEL_0|SEL_2);
 		SEL_PORT |= SEL_1;
+#endif	
 	}
 	else {
+#if COMMON_CATHODE
+		SEL_PORT |= (SEL_0|SEL_1);
+		SEL_PORT &= ~SEL_2;
+#else
 		SEL_PORT &= ~(SEL_0|SEL_1);
 		SEL_PORT |= SEL_2;
+#endif
 	}
+#if COMMON_CATHODE
+	SEG_PORT = (uint8_t)g_num_digits[pos]; /* Common Cathode display (HIGH bit = ON segment)*/
+#else
 	SEG_PORT = (uint8_t)~g_num_digits[pos]; /* Common anode display (LOW bit = ON segment)*/
+#endif
+
+#if DOT_ENABLED
 	if(g_dot_pos == pos) { /* If decimal point need to be displayed */
+#if COMMON_CATHODE
 		SEG_PORT |= SEG_H;
+#else
+		SEG_PORT &= ~SEG_H;
+#endif
 	}
-	
+#endif
 	/* cycle the digit select pins */
 	pos++;
 	if(pos > 2) {
